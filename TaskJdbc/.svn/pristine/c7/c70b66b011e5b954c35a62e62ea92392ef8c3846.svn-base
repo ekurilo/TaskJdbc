@@ -1,0 +1,200 @@
+package com.kurilo.jdbctask.dao.jdbc;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.sql.Connection;
+import java.sql.Statement;
+import java.util.Properties;
+
+import org.dbunit.DatabaseTestCase;
+import org.dbunit.PropertiesBasedJdbcDatabaseTester;
+import org.dbunit.database.DatabaseConfig;
+import org.dbunit.database.DatabaseConnection;
+import org.dbunit.database.IDatabaseConnection;
+import org.dbunit.dataset.IDataSet;
+import org.dbunit.dataset.ITable;
+import org.dbunit.dataset.xml.FlatXmlDataSetBuilder;
+import org.dbunit.ext.h2.H2DataTypeFactory;
+import org.dbunit.operation.DatabaseOperation;
+import org.h2.jdbcx.JdbcConnectionPool;
+
+import com.kurilo.jdbctask.entity.Role;
+
+public class JdbcRoleDaoTest extends DatabaseTestCase {
+
+    private static JdbcConnectionPool connPool;
+
+    private String databaseTestProperties = "testResources/databaseTest.properties";
+    private String roleDataset = "testResources/datasetRole.xml";
+    private JdbcRoleDao dao = new JdbcRoleDao(databaseTestProperties);
+
+    private IDatabaseConnection connection;
+
+    public JdbcRoleDaoTest() throws Exception {
+        Properties databaseProp = loadProperties();
+        System.setProperty(
+                PropertiesBasedJdbcDatabaseTester.DBUNIT_DRIVER_CLASS,
+                databaseProp.getProperty("driverClassName"));
+        System.setProperty(
+                PropertiesBasedJdbcDatabaseTester.DBUNIT_CONNECTION_URL,
+                databaseProp.getProperty("url"));
+        System.setProperty(PropertiesBasedJdbcDatabaseTester.DBUNIT_USERNAME,
+                databaseProp.getProperty("username"));
+        System.setProperty(PropertiesBasedJdbcDatabaseTester.DBUNIT_PASSWORD,
+                databaseProp.getProperty("password"));
+
+        if (connPool == null) {
+            connPool = JdbcConnectionPool.create(
+                    databaseProp.getProperty("url"),
+                    databaseProp.getProperty("username"),
+                    databaseProp.getProperty("password"));
+            connPool.setMaxConnections(1);
+            Connection conn = connPool.getConnection();
+            Statement sst = conn.createStatement();
+            sst.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS role (id BIGINT PRIMARY KEY ,name VARCHAR(20)); ");
+            sst.close();
+            conn.close();
+        }
+
+    }
+
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+        connection = getConnection();
+    }
+
+    @Override
+    protected void tearDown() throws Exception {
+        super.tearDown();
+        connection.close();
+    }
+
+    @Override
+    protected DatabaseOperation getSetUpOperation() throws Exception {
+        return DatabaseOperation.CLEAN_INSERT;
+    }
+
+    @Override
+    protected DatabaseOperation getTearDownOperation() throws Exception {
+        return DatabaseOperation.NONE; 
+    }
+
+    @Override
+    protected IDataSet getDataSet() throws Exception {
+        return new FlatXmlDataSetBuilder().build(new File(roleDataset));
+    }
+
+    @Override
+    protected IDatabaseConnection getConnection() throws Exception {
+        IDatabaseConnection dbUnitConnection = new DatabaseConnection(
+                connPool.getConnection());
+        DatabaseConfig dbConfig = dbUnitConnection.getConfig();
+        dbConfig.setProperty(DatabaseConfig.PROPERTY_DATATYPE_FACTORY,
+                new H2DataTypeFactory());
+        return dbUnitConnection;
+    }
+
+    public void testCreateRoleNull() throws Exception {
+        try {
+            dao.create(null);
+            fail("should throw NullPointerException");
+        } catch (NullPointerException e) {
+        } catch (Exception e) {
+            fail("should throw NullPointerException");
+        }
+
+    }
+
+    public void testCreateRole() throws Exception {
+        IDataSet dataSet = connection.createDataSet();
+        ITable table = dataSet.getTable("role");
+        int rowCount = table.getRowCount();
+        dao.create(new Role(4L, "guest"));
+        IDataSet dataSet1 = connection.createDataSet();
+        ITable tableAfter = dataSet1.getTable("role");
+        assertEquals(rowCount + 1, tableAfter.getRowCount());
+
+        try {
+            Role dublicateRole = new Role(1L, "admin");
+            dao.create(dublicateRole);
+            fail("should throw IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
+            fail("should throw IllegalArgumentException");
+        }
+
+    }
+
+    public void testFindByNameNull() throws Exception {
+        try {
+            dao.findByName(null);
+            fail("should throw NullPointerException");
+        } catch (NullPointerException e) {
+        } catch (Exception e) {
+            fail("should throw NullPointerException");
+        }
+
+    }
+
+    public void testFindByName() throws Exception {
+        String roleName = "admin";
+        Role role = dao.findByName(roleName);
+        assertNotNull(role);
+        assertEquals(roleName, role.getName());
+        Role notExistsRole = dao.findByName("notExistsRole");
+        assertNull(notExistsRole);
+
+    }
+
+    public void testUpdateRoleNull() throws Exception {
+        try {
+            dao.update(null);
+            fail("should throw NullPointerException");
+        } catch (NullPointerException e) {
+        } catch (Exception e) {
+            fail("should throw NullPointerException");
+        }
+
+    }
+
+    public void testUpdateRole() throws Exception {
+        Role roleForUpdate = new Role(1L, "superuser");
+        dao.update(roleForUpdate);
+        IDataSet dataSet = connection.createDataSet();
+        ITable table = dataSet.getTable("role");
+        assertEquals(roleForUpdate.getName(), table.getValue(0, "name"));
+    }
+
+    public void testRemoveRoleNull() throws Exception {
+        try {
+            dao.remove(null);
+            fail("should throw NullPointerException");
+        } catch (NullPointerException e) {
+        } catch (Exception e) {
+            fail("should throw NullPointerException");
+        }
+
+    }
+
+    public void testRemoveRole() throws Exception {
+        IDataSet dataSet = connection.createDataSet();
+        ITable table = dataSet.getTable("role");
+        int rowCount = table.getRowCount();
+        dao.remove(new Role(1L, "admin"));
+        IDataSet dataSet1 = connection.createDataSet();
+        ITable tableAfter = dataSet1.getTable("role");
+        assertEquals(rowCount - 1, tableAfter.getRowCount());
+    }
+
+    private Properties loadProperties() throws Exception {
+        Properties properties = new Properties();
+        InputStream in = new FileInputStream(databaseTestProperties);
+        properties.load(in);
+        in.close();
+        return properties;
+    }
+
+}

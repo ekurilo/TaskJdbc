@@ -1,0 +1,241 @@
+package com.kurilo.jdbctask.dao.jdbc;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.sql.Connection;
+import java.sql.Date;
+import java.sql.Statement;
+import java.util.List;
+import java.util.Properties;
+
+import org.dbunit.DatabaseTestCase;
+import org.dbunit.PropertiesBasedJdbcDatabaseTester;
+import org.dbunit.database.DatabaseConfig;
+import org.dbunit.database.DatabaseConnection;
+import org.dbunit.database.IDatabaseConnection;
+import org.dbunit.dataset.IDataSet;
+import org.dbunit.dataset.ITable;
+import org.dbunit.dataset.xml.FlatXmlDataSetBuilder;
+import org.dbunit.ext.h2.H2DataTypeFactory;
+import org.dbunit.operation.DatabaseOperation;
+import org.h2.jdbcx.JdbcConnectionPool;
+
+import com.kurilo.jdbctask.entity.User;
+
+public class JdbcUserDaoTest extends DatabaseTestCase {
+
+    private static JdbcConnectionPool connPool;
+
+    private String databaseTestProperties = "testResources/databaseTest.properties";
+    private String userDataset = "testResources/datasetUser.xml";
+    private JdbcUserDao dao = new JdbcUserDao(databaseTestProperties);
+
+    private IDatabaseConnection connection;
+
+    public JdbcUserDaoTest() throws Exception {
+        Properties databaseProp = loadProperties();
+        System.setProperty(
+                PropertiesBasedJdbcDatabaseTester.DBUNIT_DRIVER_CLASS,
+                databaseProp.getProperty("driverClassName"));
+        System.setProperty(
+                PropertiesBasedJdbcDatabaseTester.DBUNIT_CONNECTION_URL,
+                databaseProp.getProperty("url"));
+        System.setProperty(PropertiesBasedJdbcDatabaseTester.DBUNIT_USERNAME,
+                databaseProp.getProperty("username"));
+        System.setProperty(PropertiesBasedJdbcDatabaseTester.DBUNIT_PASSWORD,
+                databaseProp.getProperty("password"));
+
+        if (connPool == null) {
+            connPool = JdbcConnectionPool.create(
+                    databaseProp.getProperty("url"),
+                    databaseProp.getProperty("username"),
+                    databaseProp.getProperty("password"));
+            connPool.setMaxConnections(1);
+            Connection conn = connPool.getConnection();
+            Statement sst = conn.createStatement();
+            sst.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS role (id BIGINT PRIMARY KEY ,"
+                            + "name VARCHAR(20)); CREATE TABLE user (id BIGINT PRIMARY KEY, "
+                            + "login VARCHAR(40) UNIQUE , password VARCHAR(40), "
+                            + "email VARCHAR(40) UNIQUE , firstName VARCHAR(40),"
+                            + "lastName VARCHAR(40),birthday DATE,roleId BIGINT,"
+                            + "FOREIGN KEY (roleId) REFERENCES role(id));");
+            sst.close();
+            conn.close();
+        }
+
+    }
+
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+        connection = getConnection();
+    }
+
+    @Override
+    protected void tearDown() throws Exception {
+        super.tearDown();
+        connection.close();
+    }
+
+    @Override
+    protected DatabaseOperation getSetUpOperation() throws Exception {
+        return DatabaseOperation.CLEAN_INSERT;
+    }
+
+    @Override
+    protected DatabaseOperation getTearDownOperation() throws Exception {
+        return DatabaseOperation.NONE;
+    }
+
+    @Override
+    protected IDataSet getDataSet() throws Exception {
+        return new FlatXmlDataSetBuilder().build(new File(userDataset));
+    }
+
+    @Override
+    protected IDatabaseConnection getConnection() throws Exception {
+        IDatabaseConnection dbUnitConnection = new DatabaseConnection(
+                connPool.getConnection());
+        DatabaseConfig dbConfig = dbUnitConnection.getConfig();
+        dbConfig.setProperty(DatabaseConfig.PROPERTY_DATATYPE_FACTORY,
+                new H2DataTypeFactory());
+        return dbUnitConnection;
+    }
+
+    public void testCreateUserNull() {
+        try {
+            dao.create(null);
+            fail("should throw NullPointerException");
+        } catch (NullPointerException e) {
+        } catch (Exception e) {
+            fail("should throw NullPointerException");
+        }
+    }
+
+    public void testCreateUser() throws Exception {
+        IDataSet dataSet = connection.createDataSet();
+        ITable table = dataSet.getTable("user");
+        int rowCount = table.getRowCount();
+        User user = new User(5L, "user5", "user5", "user5@mail.com", "user5",
+                "user5", Date.valueOf("1993-1-1"), 1L);
+        dao.create(user);
+        IDataSet dataSet1 = connection.createDataSet();
+        ITable tableAfter = dataSet1.getTable("user");
+        assertEquals(rowCount + 1, tableAfter.getRowCount());
+
+        try {
+            dao.create(user);
+            fail("should throw IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
+            fail("should throw IllegalArgumentException");
+        }
+    }
+
+    public void testUpdateUserNull() {
+        try {
+            dao.update(null);
+            fail("should throw NullPointerException");
+        } catch (NullPointerException e) {
+        } catch (Exception e) {
+            fail("should throw NullPointerException");
+        }
+    }
+
+    public void testUpdateUser() throws Exception {
+        User user = new User(1L, "user1", "user1", "user1@mail.com", "user1",
+                "user1", Date.valueOf("1993-1-1"), 1L);
+        user.setLogin("user5");
+        user.setEmail("user5@mail.com");
+        dao.update(user);
+        IDataSet dataSet = connection.createDataSet();
+        ITable table = dataSet.getTable("user");
+        assertEquals(user.getLogin(), table.getValue(0, "login"));
+        assertEquals(user.getEmail(), table.getValue(0, "email"));
+        
+    }
+
+    public void testRemoveUserNull() {
+        try {
+            dao.remove(null);
+            fail("should throw NullPointerException");
+        } catch (NullPointerException e) {
+        } catch (Exception e) {
+            fail("should throw NullPointerException");
+        }
+    }
+
+    public void testRemoveUser() throws Exception {
+        IDataSet dataSet = connection.createDataSet();
+        ITable table = dataSet.getTable("user");
+        int rowCount = table.getRowCount();
+        User user = new User(1L, "user1", "user1", "user1@mail.com", "user1",
+                "user1", Date.valueOf("1993-1-1"), 1L);
+        dao.remove(user);
+        IDataSet dataSet1 = connection.createDataSet();
+        ITable tableAfter = dataSet1.getTable("user");
+        assertEquals(rowCount - 1, tableAfter.getRowCount());
+    }
+
+    public void testFindAll() throws Exception {
+        List<User> res = dao.findAll();
+        IDataSet dataSet = connection.createDataSet();
+        ITable table = dataSet.getTable("user");
+        int rowCount = table.getRowCount();
+        assertEquals(rowCount, res.size());
+    }
+
+    public void testFindByLoginNull() {
+        try {
+            dao.findByLogin(null);
+            fail("should throw NullPointerException");
+        } catch (NullPointerException e) {
+        } catch (Exception e) {
+            fail("should throw NullPointerException");
+        }
+
+    }
+
+    public void testFindByLogin() {
+        String login = "user1";
+        User user = dao.findByLogin(login);
+        assertNotNull(user);
+        assertEquals(login, user.getLogin());
+        
+        String notExistsLogin = "notExistsLogin";
+        User user2 = dao.findByLogin(notExistsLogin);
+        assertNull(user2);
+    }
+
+    public void testFinfByEmailNull() {
+        try {
+            dao.findByEmail(null);
+            fail("should throw NullPointerException");
+        } catch (NullPointerException e) {
+        } catch (Exception e) {
+            fail("should throw NullPointerException");
+        }
+    }
+
+    public void testFindByEmail() {
+        String email = "user1@mail.com";
+        User user = dao.findByEmail(email);
+        assertNotNull(user);
+        assertEquals(email, user.getEmail());
+        
+        String notExistsEmail = "notExistsLogin@mail.com";
+        User user2 = dao.findByEmail(notExistsEmail);
+        assertNull(user2);
+    }
+
+    private Properties loadProperties() throws Exception {
+        Properties properties = new Properties();
+        InputStream in = new FileInputStream(databaseTestProperties);
+        properties.load(in);
+        in.close();
+        return properties;
+    }
+
+}

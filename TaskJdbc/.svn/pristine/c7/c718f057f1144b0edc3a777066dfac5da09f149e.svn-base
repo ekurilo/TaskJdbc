@@ -1,0 +1,54 @@
+package com.kurilo.jdbctask.dao.jdbc;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Properties;
+
+import javax.sql.DataSource;
+
+import org.apache.commons.dbcp2.BasicDataSourceFactory;
+
+public abstract class AbstractJdbcDao {
+
+    private String resourceFileName;
+    private static DataSource source;
+
+    public AbstractJdbcDao(String resourceFileName) {
+        this.resourceFileName = resourceFileName;
+
+    }
+
+    public Connection createConnection() {
+
+        if (source == null) {
+            source = getDataSource();
+        }
+        Connection connection = null;
+        try {
+            connection = source.getConnection();
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+        return connection;
+    }
+
+    private DataSource getDataSource() {
+        Properties properties = new Properties();
+        try (InputStream in = new FileInputStream(resourceFileName)) {
+            properties.load(in);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+        DataSource dataSource = null;
+        try {
+            dataSource = BasicDataSourceFactory.createDataSource(properties);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        return dataSource;
+    }
+
+}

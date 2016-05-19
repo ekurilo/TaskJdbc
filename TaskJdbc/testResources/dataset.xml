@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<dataset>
+	<role id="1" name="admin" />
+	<role id="2" name="user" />
+	<role id="3" name="guest" />
+	
+	<user id="1" login="user1" password="user1" email="user1@mail.com"
+		firstName="user1" lastName="user1" birthday="1993-1-1" roleId="1" />
+
+	<user id="2" login="user2" password="user2" email="user2@mail.com"
+		firstName="user2" lastName="user2" birthday="1993-2-2" roleId="2" />
+
+</dataset>

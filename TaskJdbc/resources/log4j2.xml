@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration>
+  <Appenders>
+    <File name="logFile" fileName="app.log">
+        <PatternLayout pattern="%d [%-5p][%8t][%32c][%-10M] - %m%n"/>
+    </File>
+  </Appenders>
+   <loggers>
+  <Logger name="org.apache.log4j.xml" level="all"/>
+    <root level="error">
+      <appender-ref ref="logFile"/>
+    </root>
+  </loggers>
+</Configuration>
